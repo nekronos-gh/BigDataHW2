@@ -1,6 +1,9 @@
 import org.apache.spark.mllib.recommendation._
 import org.apache.spark.rdd._
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.mllib.evaluation.BinaryClassificationMetrics
+import org.apache.spark.broadcast.Broadcast
+import org.apache.spark.SparkContext
 
 object Problem3 {
 
@@ -19,7 +22,6 @@ object Problem3 {
     val rawArtistData = sc.textFile("./data/artist_data.txt")
     val rawUserArtistData = sc.textFile("./data/user_artist_data.txt")
 
-    // --- Otain RDDs ---
     // Transform artists to tuple (id, name)
     val artistByID = rawArtistData.flatMap { 
       line => 
@@ -79,11 +81,35 @@ object Problem3 {
     val trainData = splitData.flatMap(_._1).cache()
     val testData = splitData.flatMap(_._2).cache()
 
-    // Train the first recommender model
+    // Train the recommender model
     val rank = 10
-    val iterations = 10
+    val iterations = 5
     val lambda = 0.01
     val alpha = 1.0
     val model = ALS.trainImplicit(trainData, rank, iterations, lambda, alpha)
+
+    val recommendations = model.recommendProductsForUsers(50)
+
+    // Set of artists per user
+    val actualArtistsPerUser = userArtistData
+      .map(r => (r.user, r.product))
+      .groupByKey()
+      .mapValues(_.toSet)
+      .collectAsMap()
+
+    val bActualArtists = sc.broadcast(actualArtistsPerUser)
+
+    // RDD with (value, has_listened)
+    val predictionsAndLabels = recommendations.flatMap { case (userID, ratings) =>
+      val actualArtists = bActualArtists.value.getOrElse(userID, Set.empty[Int])
+      ratings.map { r =>
+        (r.rating, if (actualArtists.contains(r.product)) 1.0 else 0.0)
+      }
+    }
+
+    // Use BinaryClassificationMetrics to compute global AUC
+    val metrics = new BinaryClassificationMetrics(predictionsAndLabels)
+    println(s"Global Area under ROC: ${metrics.areaUnderROC()}")
+
   }
 }
