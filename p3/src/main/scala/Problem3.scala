@@ -66,6 +66,24 @@ object Problem3 {
       .join(activeUserIDs)
       .map { case (_, (rating, _)) => rating }
 
-    println(trainData100.map(_.user).distinct().count()) // should be 72,748
+    // Split 80/20 per user
+    val splitData = trainData100.map(r => (r.user, r))
+      .groupByKey()
+      .map { case (user, ratings) =>
+        val rnd = new scala.util.Random(42L)
+        val shuffled = rnd.shuffle(ratings.toSeq)
+        val splitIndex = (shuffled.size * 0.8).toInt
+        shuffled.splitAt(splitIndex)
+      }.cache()
+
+    val trainData = splitData.flatMap(_._1).cache()
+    val testData = splitData.flatMap(_._2).cache()
+
+    // Train the first recommender model
+    val rank = 10
+    val iterations = 10
+    val lambda = 0.01
+    val alpha = 1.0
+    val model = ALS.trainImplicit(trainData, rank, iterations, lambda, alpha)
   }
 }
