@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # Find the first JAR
-JAR=$(find target/scala-* -name '*.jar' | head -n 1)
+JAR=$(find target -name '*.jar' 2>/dev/null | head -n 1)
 
 if [ -z "$JAR" ]; then
 	echo "JAR not found! Build failed."

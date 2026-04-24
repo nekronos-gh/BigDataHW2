@@ -43,17 +43,14 @@ From: eclipse-temurin:21-jdk
         && ln -s /opt/spark-${SPARK_VERSION}-bin-hadoop3 /opt/spark \
         && rm spark-${SPARK_VERSION}-bin-hadoop3.tgz
 
-    # Setup Workspace and Build
+    # Setup Workspace
     mkdir -p /workspace
 
 %files
     . /workspace
 
-%post
-    # Run the build after files are copied
-    cd /workspace
-    /opt/sbt/bin/sbt clean package
-
 %runscript
     cd /workspace
+    # Build the project at runtime
+    sbt package
     exec ./run.sh
