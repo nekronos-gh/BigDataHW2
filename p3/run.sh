@@ -9,4 +9,9 @@ if [ -z "$JAR" ]; then
 fi
 
 # Run spark-submit silently
-"$SPARK_HOME"/bin/spark-submit --master local[*] --class Problem3 "$JAR" 2>/dev/null
+echo "Running code!"
+"$SPARK_HOME"/bin/spark-submit \
+  --master local[*] \
+  --driver-memory 50g \
+  --class Problem3 \
+  "$JAR"

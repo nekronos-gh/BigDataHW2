@@ -1,32 +1,37 @@
-#!/bin/bash
+#!/bin/bash -l
 #SBATCH --job-name=p3
 #SBATCH --output=p3_%j.out
 #SBATCH --error=p3_%j.err
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=64
-#SBATCH --mem=16G
+#SBATCH --mem=64G
 #SBATCH --time=02:00:00
 #SBATCH --partition=batch
 
-# Load required modules
-module load lang/Java/21.0.7
-module load devel/Spark/3.5.4-foss-2023b-Java-17
-
-# Set SBT version
+# Versions
 SBT_VERSION=1.10.1
-SBT_HOME=/opt/sbt
+SBT_HOME="$HOME/sbt"
 
-# Install SBT if not exists
+# Load modules (now works with -l)
+module load devel/Spark/3.5.4-foss-2023b || true  # Optional, loads Java
+
+# Install SBT
 if [ ! -d "$SBT_HOME" ]; then
+  cd /tmp  # Safe temp dir
   wget -q "https://github.com/sbt/sbt/releases/download/v${SBT_VERSION}/sbt-${SBT_VERSION}.tgz"
-  tar -xzf sbt-${SBT_VERSION}.tgz -C /opt
-  rm sbt-${SBT_VERSION}.tgz
+  tar -xzf "sbt-${SBT_VERSION}.tgz"
+  mv sbt "$SBT_HOME"
+  rm "sbt-${SBT_VERSION}.tgz"
+  cd -
 fi
+
 export PATH="${SBT_HOME}/bin:$PATH"
 
-# Build the project
-sbt package
+mkdir -p "$HOME/.runtime"
+export XDG_RUNTIME_DIR="$HOME/.runtime"
+export SBT_OPTS="-Dsbt.global.base=$HOME/.sbt -Dsbt.ivy.home=$HOME/.ivy2 -Dsbt.boot.directory=$HOME/.sbt/boot"
 
-# Run the project
+# Run
+sbt package
 ./run.sh
