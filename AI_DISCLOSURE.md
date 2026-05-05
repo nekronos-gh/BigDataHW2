@@ -77,7 +77,7 @@
 
 ### Henrik Klasen
 
-**AI Platform used:** Microsoft Copilot (via University in Outlook browser)
+**AI Platform used:** Github Copilot (using student package on Github)
 
 **Development Environment:**
 
@@ -87,18 +87,18 @@
 **Workflow & Prompting strategy:**
 
 1. **Task delegation:** The LLM handles tasks with context of the full codebase:
-   - Java class generation for the exercises part a and b
-   - Proposals of the map reducer architecture for part b
-   - Debugging process (primarily for imports and CLI argument fine tuning for part C, as it was not very clear how to pass multiple directories as input)
+   - Implementation of the Scala scripts
+
 
 2. **Self-Handled Tasks**:
-   - Bash/SBATCH script for easy execution of part C (due to LLMs lack of information on SLURM and bash environment on the cluster)
-   - Writing of the README file
-   - Compilation and execution of parts A and B
-   - Choosing the base class for part B (based on HadoopWordPairs)
+   - Bash script for download
+   - Strategy of implementation
+   - Writing of report
 
 3. **AI-assisted tasks:**
-   - Task understanding. First tried on my own, then pasted the task into a prompt and asked about any further ambiguities to make sure that it was correct
+   - Task understanding
+   - Scala Syntax
+   - Debugging
 
 **Key prompting steps:**
 
@@ -107,13 +107,10 @@
 3. Ask for any things which can be misunderstood (e.g. if for part B each of the subexercises should have their own java class implementation, or if we shall implement it all in one class)
 4. Request a draft for how to structure the exercise
 5. Review draft of the exercise plan and request changes where needed
-6. Request Java code (include the base class in the prompt and outline the required changes)
-7. Review java class output by LLM, compile test it
-8. Request any further imports missed (e.g. util functions and so on)
-9. Apply fixes in java class
-10. Execute the program, interpret output
-    (11. applies to Part C: request instructions on how to use multiple input directories)
-
+6. Request Scala code
+7. Review and test scala code
+8. Copy any errors or warnings or weird looking outputs into the LLM for clarification and if applicable, bug fixing
+9. Run code for testing and getting result.
 ---
 
 ## Summary of AI Tools Used
@@ -124,7 +121,7 @@
 | Eduardo Rodríguez Sánchez | Perplexity AI          | Documentation lookup               |
 | Michalina Miszkiewicz     | Microsoft Copilot      | Code Implementation                |
 | Michalina Miszkiewicz     | ChatGPT                | Text correction                    |
-| Henrik Klasen             | Microsoft Copilot      | Code Implementation, Debugging     |
+| Henrik Klasen             | Github Copilot      | Code Implementation, Debugging     |
 
 ---
 
