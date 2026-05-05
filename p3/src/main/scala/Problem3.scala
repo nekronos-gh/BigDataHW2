@@ -115,45 +115,93 @@ object Problem3 {
 
     // Train the recommender model
     // Hyperparameters
-    val ranks   = Array(10, 25, 50)
+    val ranks = Array(10, 25, 50)
     val lambdas = Array(1.0, 0.1, 0.01)
     val alphas  = Array(1.0, 10.0, 100.0)
-    val numFolds   = 5
+    val numFolds = 3
     val iterations = 5
 
-    var bestAUC    = Double.MinValue
-    var bestRank   = 0
-    var bestLambda = 0.0
-    var bestAlpha  = 0.0
+    val ratings = trainData
 
-    val indexedTrain = trainData.zipWithIndex().cache()
+    // Fold assigment
+    val indexed = ratings.zipWithIndex().map {
+      case (r, idx) => (idx % numFolds, r)
+    }.cache()
 
-    // Hyperparameter triple loop
-    for (rank <- ranks; lambda <- lambdas; alpha <- alphas) {
-      // 5-fold cross validation
-      val cvAUCs = (0 until numFolds).map { fold =>
-        val cvTrain = indexedTrain.filter(_._2 % numFolds != fold).map(_._1)
-        val cvVal   = indexedTrain.filter(_._2 % numFolds == fold).map(_._1)
-        val cvModel = ALS.trainImplicit(cvTrain, rank, iterations, lambda, alpha)
-        val testUserIDs = cvVal.map(_.user).distinct().map(id => (id, true))
-        val recs = cvModel.recommendProductsForUsers(50)
-          .join(testUserIDs).map { case (uid, (r, _)) => (uid, r) }
-        recs.map { case (uid, ratings) =>
-          val actual = bActualArtists.value.getOrElse(uid, Set.empty[Int])
-          val pal = ratings.map(r => (r.rating, if (actual.contains(r.product)) 1.0 else 0.0))
-          new BinaryClassificationMetrics(sc.parallelize(pal)).areaUnderROC()
-        }.mean()
-      }
-      val meanAUC = cvAUCs.sum / numFolds
-      if (meanAUC > bestAUC) { bestAUC = meanAUC; bestRank = rank; bestLambda = lambda; bestAlpha = alpha }
+    // Pre-split folds once
+    val folds: Array[(RDD[Rating], RDD[Rating])] = (0 until numFolds).map { fold =>
+
+      val train = indexed
+        .filter(_._1 != fold)
+        .map(_._2)
+        .cache()
+
+      val valid = indexed
+        .filter(_._1 == fold)
+        .map(_._2)
+        .cache()
+
+      (train, valid)
+    }.toArray
+
+    // AUC lambda
+    def computeAUC(predictions: RDD[(Double, Double)]): Double = {
+      val metrics = new BinaryClassificationMetrics(predictions)
+      metrics.areaUnderROC()
     }
 
-    // Train the final model with the best hyper parameters
-    val model = ALS.trainImplicit(trainData, bestRank, iterations, bestLambda, bestAlpha)
-    val recommendations = model.recommendProductsForUsers(50)
-      .join(testUserIDs).map { case (uid, (r, _)) => (uid, r) }
+    // parallel Hyperparameter search
+    val grid = for {
+      r <- ranks
+      l <- lambdas
+      a <- alphas
+    } yield (r, l, a)
 
+    // Triple parallel loop
+    val results = grid.par.map { case (rank, lambda, alpha) =>
+      val foldAUCs = folds.map { case (train, valid) =>
+        val model = ALS.trainImplicit(
+          train,
+          rank,
+          iterations,
+          lambda,
+          alpha
+        )
+        val predictions = model
+          .predict(valid.map(x => (x.user, x.product)))
+          .map(x => ((x.user, x.product), x.rating))
+
+        val labels = valid.map(x => ((x.user, x.product), 1.0))
+
+        val joined = predictions.join(labels)
+          .map { case (_, (pred, label)) =>
+            (pred, label)
+          }
+
+        computeAUC(joined)
+      }
+
+      val avgAUC = foldAUCs.sum / numFolds
+
+      ((rank, lambda, alpha), avgAUC)
+    }
+
+    val best = results.maxBy(_._2)
+    println("\nBEST HYPERPARAMETERS:")
+    println(s"rank=${best._1._1}, lambda=${best._1._2}, alpha=${best._1._3}")
+    println(s"AUC=${best._2}")
+
+    // Train the final model with the best hyper parameters
+    val bestModel = ALS.trainImplicit(
+      ratings,
+      best._1._1,
+      iterations,
+      best._1._2,
+      best._1._3
+    )
     // Calculate all evaluation metrics
+    val recommendations = bestModel.recommendProductsForUsers(50)
+      .join(testUserIDs).map { case (uid, (r, _)) => (uid, r) }
     val perUser = recommendations.map { case (uid, ratings) =>
       val actual = bActualArtists.value.getOrElse(uid, Set.empty[Int])
       val pal = ratings.map(r => (r.rating, if (actual.contains(r.product)) 1.0 else 0.0))
@@ -169,7 +217,7 @@ object Problem3 {
 
     val n = perUser.count().toDouble
     println("BEST MODEL")
-    println(s"Best params: rank=$bestRank lambda=$bestLambda alpha=$bestAlpha CV-AUC=$bestAUC")
+    println(s"Best params: rank=${best._1._1} lambda=${best._1._2} alpha=${best._1._3} CV-AUC=${best._2}")
     println(f"AUC:       ${perUser.map(_._1).sum/n}%.4f")
     println(f"Precision: ${perUser.map(_._2).sum/n}%.4f")
     println(f"Recall:    ${perUser.map(_._3).sum/n}%.4f")
