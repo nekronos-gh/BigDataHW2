@@ -57,7 +57,9 @@ object Problem3 {
 
     // Filter by users that listen to 
     val activeUserIDs = userArtistData
-      .map(x => (x.user, 1))
+      .map(x => (x.user, x.product))
+      .distinct()
+      .map(x => (x._1, 1))
       .reduceByKey(_ + _)
       .filter(x => x._2 >= 100)
       .map { case (user, _) => (user, true) }
