@@ -5,20 +5,27 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=64
-#SBATCH --mem=64G
-#SBATCH --time=02:00:00
+#SBATCH --mem=0
+#SBATCH --time=04:00:00
 #SBATCH --partition=batch
+#SBATCH --exclusive              # Guarantee all 64 cores, no node sharing
 
-# Versions
+# --- Versions ---
 SBT_VERSION=1.10.1
 SBT_HOME="$HOME/sbt"
 
-# Load modules (now works with -l)
-module load devel/Spark/3.5.4-foss-2023b || true  # Optional, loads Java
+# Load modules
+module load env/development/2024a
+module load devel/Spark
+if [ -z "$SPARK_HOME" ]; then
+  echo "ERROR: SPARK_HOME not set after module load. Aborting." >&2
+  exit 1
+fi
 
-# Install SBT
+# Install SBT once into $HOME (skipped on subsequent runs)
 if [ ! -d "$SBT_HOME" ]; then
-  cd /tmp  # Safe temp dir
+  echo "Installing SBT ${SBT_VERSION}..."
+  cd /tmp
   wget -q "https://github.com/sbt/sbt/releases/download/v${SBT_VERSION}/sbt-${SBT_VERSION}.tgz"
   tar -xzf "sbt-${SBT_VERSION}.tgz"
   mv sbt "$SBT_HOME"
@@ -32,6 +39,17 @@ mkdir -p "$HOME/.runtime"
 export XDG_RUNTIME_DIR="$HOME/.runtime"
 export SBT_OPTS="-Dsbt.global.base=$HOME/.sbt -Dsbt.ivy.home=$HOME/.ivy2 -Dsbt.boot.directory=$HOME/.sbt/boot"
 
-# Run
+# Build (only rebuilds when sources changed thanks to sbt incremental compiler)
+echo "Building project..."
 sbt package
+if [ $? -ne 0 ]; then
+  echo "ERROR: sbt build failed. Aborting." >&2
+  exit 1
+fi
+
+# Pass memory budget to run.sh via environment variable
+export DRIVER_MEMORY="100g"
+
+# Run
+echo "Submitting Spark job..."
 ./run.sh
