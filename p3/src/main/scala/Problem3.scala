@@ -105,6 +105,7 @@ object Problem3 {
     val bActualArtists = sc.broadcast(actualArtistsPerUser)
 
 
+    // Measure AUC per user
     val perUserAUC = recommendations.map { case (userID, ratings) =>
       val actualArtists = bActualArtists.value.getOrElse(userID, Set.empty[Int])
       val predsAndLabels = ratings.map { r =>
@@ -115,5 +116,27 @@ object Problem3 {
     }
     val avgAUC = perUserAUC.mean()
     println(s"Average AUC (ALS model): $avgAUC")
+
+    // Compute total play count per artist for baseline
+    val artistsTotalCount = userArtistData
+      .map(r => (r.product, r.rating.toDouble))
+      .reduceByKey(_ + _)
+      .sortBy(_._2, ascending = false)
+      .collect()
+
+    def predictMostPopular(user: Int, numArtists: Int) = {
+      val topArtists = artistsTotalCount.take(numArtists)
+      topArtists.map { case (artist, rating) => Rating(user, artist, rating) }
+    }
+
+    val baselineAUC = testUserIDs.keys.map { userID =>
+      val actualArtists = bActualArtists.value.getOrElse(userID, Set.empty[Int])
+      val predsAndLabels = predictMostPopular(userID, 50).map { r =>
+        (r.rating, if (actualArtists.contains(r.product)) 1.0 else 0.0)
+      }
+      val metrics = new BinaryClassificationMetrics(sc.parallelize(predsAndLabels))
+      metrics.areaUnderROC()
+    }
+    println(s"Average AUC (Most Popular baseline): ${baselineAUC.mean()}")
   }
 }
