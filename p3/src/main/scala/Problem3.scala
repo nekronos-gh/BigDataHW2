@@ -103,7 +103,7 @@ object Problem3 {
       val topArtists = artistsTotalCount.take(numArtists)
       topArtists.map { case (artist, rating) => Rating(user, artist, rating) }
     }
-    val baselineAUC = testUserIDs.keys.map { userID =>
+    val baselineAUC = testUserIDs.map(_._1).map { userID =>
       val actualArtists = bActualArtists.value.getOrElse(userID, Set.empty[Int])
       val predsAndLabels = predictMostPopular(userID, 50).map { r =>
         (r.rating, if (actualArtists.contains(r.product)) 1.0 else 0.0)
