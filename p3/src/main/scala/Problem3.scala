@@ -103,7 +103,7 @@ object Problem3 {
       val topArtists = artistsTotalCount.take(numArtists)
       topArtists.map { case (artist, rating) => Rating(user, artist, rating) }
     }
-    val baselineAUC = testUserIDs.map(_._1).map { userID =>
+    val baselineAUC = testUserIDs.map(_._1).collect().map { userID =>
       val actualArtists = bActualArtists.value.getOrElse(userID, Set.empty[Int])
       val predsAndLabels = predictMostPopular(userID, 50).map { r =>
         (r.rating, if (actualArtists.contains(r.product)) 1.0 else 0.0)
@@ -111,7 +111,7 @@ object Problem3 {
       val metrics = new BinaryClassificationMetrics(sc.parallelize(predsAndLabels))
       metrics.areaUnderROC()
     }
-    val baselineValue = baselineAUC.sum() / baselineAUC.count().toDouble
+    val baselineValue = baselineAUC.sum / baselineAUC.length.toDouble
     println(s"Baseline: Average AUC (Most Popular): $baselineValue")
 
     // Train the recommender model
@@ -159,7 +159,7 @@ object Problem3 {
     } yield (r, l, a)
 
     // Triple parallel loop
-    val results = grid.par.map { case (rank, lambda, alpha) =>
+    val results = grid.map { case (rank, lambda, alpha) =>
       val foldAUCs = folds.map { case (train, valid) =>
         val model = ALS.trainImplicit(
           train,
@@ -179,7 +179,8 @@ object Problem3 {
             (pred, label)
           }
 
-        computeAUC(joined)
+        val arr = joined.collect()
+        computeAUC(sc.parallelize(arr))
       }
 
       val avgAUC = foldAUCs.sum / numFolds
@@ -208,7 +209,7 @@ object Problem3 {
     // Calculate all evaluation metrics
     val recommendations = bestModel.recommendProductsForUsers(50)
       .join(testUserIDs).map { case (uid, (r, _)) => (uid, r) }
-    val perUser = recommendations.map { case (uid, ratings) =>
+    val perUser = recommendations.collect().map { case (uid, ratings) =>
       val actual = bActualArtists.value.getOrElse(uid, Set.empty[Int])
       val pal = ratings.map(r => (r.rating, if (actual.contains(r.product)) 1.0 else 0.0))
       val auc = new BinaryClassificationMetrics(sc.parallelize(pal)).areaUnderROC()
@@ -219,11 +220,9 @@ object Problem3 {
       val recall    = if (tp+fn > 0) tp/(tp+fn) else 0.0
       val accuracy  = if (tp+fp+fn > 0) tp/(tp+fp+fn) else 0.0
       (auc, precision, recall, accuracy)
-    }.cache()
+    }
 
-    val n = perUser.count().toDouble
-    println("BEST MODEL")
-    println(s"Best params: rank=$bestRank lambda=$bestLambda alpha=$bestAlpha CV-AUC=$bestAUC")
+    val n = perUser.length.toDouble
     println(f"AUC:       ${perUser.map(_._1).sum/n}%.4f")
     println(f"Precision: ${perUser.map(_._2).sum/n}%.4f")
     println(f"Recall:    ${perUser.map(_._3).sum/n}%.4f")
