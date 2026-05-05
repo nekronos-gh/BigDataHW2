@@ -111,7 +111,8 @@ object Problem3 {
       val metrics = new BinaryClassificationMetrics(sc.parallelize(predsAndLabels))
       metrics.areaUnderROC()
     }
-    println(s"Baseline: Average AUC (Most Popular): ${baselineAUC.mean()}")
+    val baselineValue = baselineAUC.sum() / baselineAUC.count().toDouble
+    println(s"Baseline: Average AUC (Most Popular): $baselineValue")
 
     // Train the recommender model
     // Hyperparameters
@@ -187,17 +188,22 @@ object Problem3 {
     }
 
     val best = results.maxBy(_._2)
+    val bestRank = best._1._1 
+    val bestLambda = best._1._2
+    val bestAlpha = best._1._3
+    val bestAUC = best._2
+
     println("\nBEST HYPERPARAMETERS:")
-    println(s"rank=${best._1._1}, lambda=${best._1._2}, alpha=${best._1._3}")
-    println(s"AUC=${best._2}")
+    println(s"rank=${bestRank}, lambda=${bestLambda}, alpha=${bestAlpha}")
+    println(s"AUC=${bestAUC}")
 
     // Train the final model with the best hyper parameters
     val bestModel = ALS.trainImplicit(
       ratings,
-      best._1._1,
+      bestRank,
       iterations,
-      best._1._2,
-      best._1._3
+      bestLambda,
+      bestAlpha
     )
     // Calculate all evaluation metrics
     val recommendations = bestModel.recommendProductsForUsers(50)
@@ -217,7 +223,7 @@ object Problem3 {
 
     val n = perUser.count().toDouble
     println("BEST MODEL")
-    println(s"Best params: rank=${best._1._1} lambda=${best._1._2} alpha=${best._1._3} CV-AUC=${best._2}")
+    println(s"Best params: rank=$bestRank lambda=$bestLambda alpha=$bestAlpha CV-AUC=$bestAUC")
     println(f"AUC:       ${perUser.map(_._1).sum/n}%.4f")
     println(f"Precision: ${perUser.map(_._2).sum/n}%.4f")
     println(f"Recall:    ${perUser.map(_._3).sum/n}%.4f")
