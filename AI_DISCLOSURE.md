@@ -45,34 +45,31 @@
 
 **Development Environment:**
 
-- Editor:Visual Studio Code and terminal-based editing (`nano`/ `vim`)
+- Editor: Visual Studio Code and terminal-based editing (`nano` / `vim`)
 - LLM Interface: browser-based ChatGPT and Microsoft Copilot
 
-1. **Task delegation:** The LLM handled tasks with the full exercise context:
-   - Help with improving the top-100 computation
-   - Help with the debugging and optimization process
-   - Checking and adapting grammar in the documentation
-   - Adding better, more readable comments in the code
+**Workflow & Prompting Strategy:**
 
-2. **Self-Handled Tasks:**
-   - Designing the Spark pipeline for tokenization, counting, pair generation, and final output extraction
-   - Rebuilding the jar, running and validating the Spark jobs on IRIS, and verifying the correctness of intermediate and final outputs
-   - Executing the full scalability experiment from `AA` to `AK`, collecting runtime and hardware measurements, and preparing the base documentation
+1. **Task understanding:**  
+   AI tools were used to help clarify the requirements of the exercise and break the work into smaller steps.
 
-3. **AI-assisted tasks:**
-   - Help with understanding the tasks.
+2. **Testing and debugging:**  
+   AI tools assisted with testing the scripts, interpreting error messages, and debugging Spark-related issues.
+
+3. **Code adaptation:**  
+   AI tools were used to help adapt some elements of the code, especially parts related to Spark ML pipelines, evaluation, and running the experiments.
+
+4. **Documentation support:**  
+   AI tools were used for grammar correction and improving the readability of the final documentation.
 
 **Key Prompting Steps:**
 
-1. Interpret the exercise requirements for Spark based on Problem 1
-2. Paste the instructions to the LLM and ask for clarifications.
-3. Create base solutions and ask for help if problems show up
-4. Review and test proposed changes
-5. Ask for improviment of specific functions
-6. Rewiew the and adapt the solutions
-7. Ask for adding comment to make code more readable
-8. Ask for fixes in prepard documentation
-
+1. Ask for clarification of the exercise requirements.
+2. Ask for help testing and debugging errors.
+3. Ask for support adapting selected code elements.
+4. Ask for grammar and documentation improvements.
+5. Request a draft structure general solution.
+6. Review the proposed solution structure and ask for changes where needed.
 ---
 
 ### Henrik Klasen
