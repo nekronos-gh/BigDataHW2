@@ -83,12 +83,26 @@ object Problem3 {
     val trainData = splitData.flatMap(_._1).cache()
     val testData = splitData.flatMap(_._2).cache()
 
+    // Set of artists per user
+    val actualArtistsPerUser = userArtistData
+      .map(r => (r.user, r.product))
+      .groupByKey()
+      .mapValues(_.toSet)
+      .collectAsMap()
+
+    val bActualArtists = sc.broadcast(actualArtistsPerUser)
+    val testUserIDs = testData.map(_.user).distinct().map(id => (id, true))
+
     // Calculate AUC for Most Popular as a baseline
+    val artistsTotalCount = userArtistData
+      .map(r => (r.product, r.rating.toDouble))
+      .reduceByKey(_ + _)
+      .sortBy(_._2, ascending = false)
+      .collect()
     def predictMostPopular(user: Int, numArtists: Int) = {
       val topArtists = artistsTotalCount.take(numArtists)
       topArtists.map { case (artist, rating) => Rating(user, artist, rating) }
     }
-
     val baselineAUC = testUserIDs.keys.map { userID =>
       val actualArtists = bActualArtists.value.getOrElse(userID, Set.empty[Int])
       val predsAndLabels = predictMostPopular(userID, 50).map { r =>
@@ -124,11 +138,11 @@ object Problem3 {
         val testUserIDs = cvVal.map(_.user).distinct().map(id => (id, true))
         val recs = cvModel.recommendProductsForUsers(50)
           .join(testUserIDs).map { case (uid, (r, _)) => (uid, r) }
-          recs.map { case (uid, ratings) =>
-            val actual = bActualArtists.value.getOrElse(uid, Set.empty[Int])
-            val pal = ratings.map(r => (r.rating, if (actual.contains(r.product)) 1.0 else 0.0))
-            new BinaryClassificationMetrics(sc.parallelize(pal)).areaUnderROC()
-          }.mean()
+        recs.map { case (uid, ratings) =>
+          val actual = bActualArtists.value.getOrElse(uid, Set.empty[Int])
+          val pal = ratings.map(r => (r.rating, if (actual.contains(r.product)) 1.0 else 0.0))
+          new BinaryClassificationMetrics(sc.parallelize(pal)).areaUnderROC()
+        }.mean()
       }
       val meanAUC = cvAUCs.sum / numFolds
       if (meanAUC > bestAUC) { bestAUC = meanAUC; bestRank = rank; bestLambda = lambda; bestAlpha = alpha }
@@ -136,7 +150,6 @@ object Problem3 {
 
     // Train the final model with the best hyper parameters
     val model = ALS.trainImplicit(trainData, bestRank, iterations, bestLambda, bestAlpha)
-    val testUserIDs = testData.map(_.user).distinct().map(id => (id, true))
     val recommendations = model.recommendProductsForUsers(50)
       .join(testUserIDs).map { case (uid, (r, _)) => (uid, r) }
 
@@ -161,5 +174,38 @@ object Problem3 {
     println(f"Precision: ${perUser.map(_._2).sum/n}%.4f")
     println(f"Recall:    ${perUser.map(_._3).sum/n}%.4f")
     println(f"Accuracy:  ${perUser.map(_._4).sum/n}%.4f")
+
+    // New synthetic user profile
+    val maxUserID = userArtistData.map(_.user).max()
+    val newUserID = maxUserID + 1
+
+    // 8 ratings for existing artist IDs
+    val existingArtistIDs = userArtistData
+      .map(_.product)
+      .distinct()
+      .takeSample(withReplacement = false, 8, seed = 42)
+
+    val newUserRatings = sc.parallelize(
+      existingArtistIDs.zipWithIndex.map { case (artistID, i) =>
+        val score = 5000.0 - i * 300
+        Rating(newUserID, artistID, score)
+      }
+    )
+
+    // Now retrain with the new data
+    val updatedTrainData = trainData.union(newUserRatings).cache()
+    val newModel = ALS.trainImplicit(updatedTrainData, bestRank, iterations, bestLambda, bestAlpha)
+    val ratedArtistIDs = newUserRatings.map(_.product).collect().toSet
+
+    // Print recommendations for new user
+    val top25ForNewUser = newModel
+      .recommendProducts(newUserID, 100)
+      .filter(r => !ratedArtistIDs.contains(r.product))
+      .take(25)
+    println(s"\nTop-25 recommendations for new user $newUserID:")
+    top25ForNewUser.zipWithIndex.foreach { case (r, i) =>
+      val artistName = artistByID.getOrElse(r.product, s"Unknown artist ${r.product}")
+      println(f"${i + 1}%2d. $artistName%s (artistID=${r.product}, score=${r.rating}%.4f)")
+    }
   }
 }
