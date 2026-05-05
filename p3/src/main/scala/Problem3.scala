@@ -104,17 +104,16 @@ object Problem3 {
 
     val bActualArtists = sc.broadcast(actualArtistsPerUser)
 
-    // RDD with (value, has_listened)
-    val predictionsAndLabels = recommendations.flatMap { case (userID, ratings) =>
+
+    val perUserAUC = recommendations.map { case (userID, ratings) =>
       val actualArtists = bActualArtists.value.getOrElse(userID, Set.empty[Int])
-      ratings.map { r =>
+      val predsAndLabels = ratings.map { r =>
         (r.rating, if (actualArtists.contains(r.product)) 1.0 else 0.0)
       }
+      val metrics = new BinaryClassificationMetrics(sc.parallelize(predsAndLabels))
+      metrics.areaUnderROC()
     }
-
-    // Use BinaryClassificationMetrics to compute global AUC
-    val metrics = new BinaryClassificationMetrics(predictionsAndLabels)
-    println(s"Global Area under ROC: ${metrics.areaUnderROC()}")
-
+    val avgAUC = perUserAUC.mean()
+    println(s"Average AUC (ALS model): $avgAUC")
   }
 }
