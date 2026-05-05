@@ -8,10 +8,20 @@ if [ -z "$JAR" ]; then
 	exit 1
 fi
 
-# Run spark-submit silently
-echo "Running code!"
+# Memory: use what job.slurm exported, or fall back to a safe default
+DRIVER_MEMORY="${DRIVER_MEMORY:-50g}"
+
+echo "Running code with driver memory: ${DRIVER_MEMORY}"
 "$SPARK_HOME"/bin/spark-submit \
-  --master local[*] \
-  --driver-memory 50g \
-  --class Problem3 \
-  "$JAR"
+	--master local[*] \
+	--driver-memory "${DRIVER_MEMORY}" \
+	--executor-memory "${DRIVER_MEMORY}" \
+	--conf spark.driver.maxResultSize=8g \
+	--conf spark.memory.fraction=0.8 \
+	--conf spark.memory.storageFraction=0.3 \
+	--conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+	--conf spark.kryoserializer.buffer.max=512m \
+	--conf spark.executor.extraJavaOptions="-XX:+UseG1GC" \
+	--conf spark.driver.extraJavaOptions="-XX:+UseG1GC" \
+	--class Problem3 \
+	"$JAR"
