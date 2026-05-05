@@ -41,7 +41,7 @@ export SBT_OPTS="-Dsbt.global.base=$HOME/.sbt -Dsbt.ivy.home=$HOME/.ivy2 -Dsbt.b
 
 # Build (only rebuilds when sources changed thanks to sbt incremental compiler)
 echo "Building project..."
-sbt package
+sbt clean package
 if [ $? -ne 0 ]; then
   echo "ERROR: sbt build failed. Aborting." >&2
   exit 1
