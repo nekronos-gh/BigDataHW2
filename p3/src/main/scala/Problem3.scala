@@ -83,47 +83,7 @@ object Problem3 {
     val trainData = splitData.flatMap(_._1).cache()
     val testData = splitData.flatMap(_._2).cache()
 
-    // Train the recommender model
-    val rank = 10
-    val iterations = 5
-    val lambda = 0.01
-    val alpha = 1.0
-    val model = ALS.trainImplicit(trainData, rank, iterations, lambda, alpha)
-
-    val testUserIDs = testData.map(_.user).distinct().map(id => (id, true))
-    val recommendations = model.recommendProductsForUsers(50)
-      .join(testUserIDs)
-      .map { case (userID, (recs, _)) => (userID, recs) }
-
-    // Set of artists per user
-    val actualArtistsPerUser = userArtistData
-      .map(r => (r.user, r.product))
-      .groupByKey()
-      .mapValues(_.toSet)
-      .collectAsMap()
-
-    val bActualArtists = sc.broadcast(actualArtistsPerUser)
-
-
-    // Measure AUC per user
-    val perUserAUC = recommendations.map { case (userID, ratings) =>
-      val actualArtists = bActualArtists.value.getOrElse(userID, Set.empty[Int])
-      val predsAndLabels = ratings.map { r =>
-        (r.rating, if (actualArtists.contains(r.product)) 1.0 else 0.0)
-      }
-      val metrics = new BinaryClassificationMetrics(sc.parallelize(predsAndLabels))
-      metrics.areaUnderROC()
-    }
-    val avgAUC = perUserAUC.mean()
-    println(s"Average AUC (ALS model): $avgAUC")
-
-    // Compute total play count per artist for baseline
-    val artistsTotalCount = userArtistData
-      .map(r => (r.product, r.rating.toDouble))
-      .reduceByKey(_ + _)
-      .sortBy(_._2, ascending = false)
-      .collect()
-
+    // Calculate AUC for Most Popular as a baseline
     def predictMostPopular(user: Int, numArtists: Int) = {
       val topArtists = artistsTotalCount.take(numArtists)
       topArtists.map { case (artist, rating) => Rating(user, artist, rating) }
@@ -137,6 +97,69 @@ object Problem3 {
       val metrics = new BinaryClassificationMetrics(sc.parallelize(predsAndLabels))
       metrics.areaUnderROC()
     }
-    println(s"Average AUC (Most Popular baseline): ${baselineAUC.mean()}")
+    println(s"Baseline: Average AUC (Most Popular): ${baselineAUC.mean()}")
+
+    // Train the recommender model
+    // Hyperparameters
+    val ranks   = Array(10, 25, 50)
+    val lambdas = Array(1.0, 0.1, 0.01)
+    val alphas  = Array(1.0, 10.0, 100.0)
+    val numFolds   = 5
+    val iterations = 5
+
+    var bestAUC    = Double.MinValue
+    var bestRank   = 0
+    var bestLambda = 0.0
+    var bestAlpha  = 0.0
+
+    val indexedTrain = trainData.zipWithIndex().cache()
+
+    // Hyperparameter triple loop
+    for (rank <- ranks; lambda <- lambdas; alpha <- alphas) {
+      // 5-fold cross validation
+      val cvAUCs = (0 until numFolds).map { fold =>
+        val cvTrain = indexedTrain.filter(_._2 % numFolds != fold).map(_._1)
+        val cvVal   = indexedTrain.filter(_._2 % numFolds == fold).map(_._1)
+        val cvModel = ALS.trainImplicit(cvTrain, rank, iterations, lambda, alpha)
+        val testUserIDs = cvVal.map(_.user).distinct().map(id => (id, true))
+        val recs = cvModel.recommendProductsForUsers(50)
+          .join(testUserIDs).map { case (uid, (r, _)) => (uid, r) }
+          recs.map { case (uid, ratings) =>
+            val actual = bActualArtists.value.getOrElse(uid, Set.empty[Int])
+            val pal = ratings.map(r => (r.rating, if (actual.contains(r.product)) 1.0 else 0.0))
+            new BinaryClassificationMetrics(sc.parallelize(pal)).areaUnderROC()
+          }.mean()
+      }
+      val meanAUC = cvAUCs.sum / numFolds
+      if (meanAUC > bestAUC) { bestAUC = meanAUC; bestRank = rank; bestLambda = lambda; bestAlpha = alpha }
+    }
+
+    // Train the final model with the best hyper parameters
+    val model = ALS.trainImplicit(trainData, bestRank, iterations, bestLambda, bestAlpha)
+    val testUserIDs = testData.map(_.user).distinct().map(id => (id, true))
+    val recommendations = model.recommendProductsForUsers(50)
+      .join(testUserIDs).map { case (uid, (r, _)) => (uid, r) }
+
+    // Calculate all evaluation metrics
+    val perUser = recommendations.map { case (uid, ratings) =>
+      val actual = bActualArtists.value.getOrElse(uid, Set.empty[Int])
+      val pal = ratings.map(r => (r.rating, if (actual.contains(r.product)) 1.0 else 0.0))
+      val auc = new BinaryClassificationMetrics(sc.parallelize(pal)).areaUnderROC()
+      val tp = ratings.count(r => actual.contains(r.product)).toDouble
+      val fp = ratings.length - tp
+      val fn = actual.size - tp
+      val precision = if (tp+fp > 0) tp/(tp+fp) else 0.0
+      val recall    = if (tp+fn > 0) tp/(tp+fn) else 0.0
+      val accuracy  = if (tp+fp+fn > 0) tp/(tp+fp+fn) else 0.0
+      (auc, precision, recall, accuracy)
+    }.cache()
+
+    val n = perUser.count().toDouble
+    println("BEST MODEL")
+    println(s"Best params: rank=$bestRank lambda=$bestLambda alpha=$bestAlpha CV-AUC=$bestAUC")
+    println(f"AUC:       ${perUser.map(_._1).sum/n}%.4f")
+    println(f"Precision: ${perUser.map(_._2).sum/n}%.4f")
+    println(f"Recall:    ${perUser.map(_._3).sum/n}%.4f")
+    println(f"Accuracy:  ${perUser.map(_._4).sum/n}%.4f")
   }
 }
