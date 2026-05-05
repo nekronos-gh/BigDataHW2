@@ -90,7 +90,10 @@ object Problem3 {
     val alpha = 1.0
     val model = ALS.trainImplicit(trainData, rank, iterations, lambda, alpha)
 
+    val testUserIDs = testData.map(_.user).distinct().map(id => (id, true))
     val recommendations = model.recommendProductsForUsers(50)
+      .join(testUserIDs)
+      .map { case (userID, (recs, _)) => (userID, recs) }
 
     // Set of artists per user
     val actualArtistsPerUser = userArtistData
