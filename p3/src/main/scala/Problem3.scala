@@ -108,15 +108,10 @@ object Problem3 {
     val actualArtistsPerUser = trainData100
       .map(r => (r.user, r.product))
       .groupByKey().mapValues(_.toSet).collectAsMap()
-    val bActualArtists = sc.broadcast(actualArtistsPerUser)
     val testArtistsPerUser = testData
       .map(r => (r.user, r.product))
       .groupByKey().mapValues(_.toSet).collectAsMap()
     val bTestArtists = sc.broadcast(testArtistsPerUser)
-
-    // Collect all artist IDs once
-    val allArtistIDs  = userArtistData.map(_.product).distinct().collect()
-    val bAllArtistIDs = sc.broadcast(allArtistIDs)
 
     val testUserIDs = testData.map(_.user).distinct().map(id => (id, true))
       .persist(StorageLevel.MEMORY_AND_DISK_SER)
@@ -168,31 +163,16 @@ object Problem3 {
       val validPerUser = valid.map(r => (r.user, r.product))
         .groupByKey().collectAsMap()
 
-      // Build all (user, artist) candidate pairs in one shot
-      val candidates: Array[(Int, Int, Boolean)] = validPerUser.toArray.flatMap {
-        case (user, posArts) =>
-          val posSet   = posArts.toSet
-          val trainSeen = bActualArtists.value.getOrElse(user, Set.empty[Int])
-          val excluded  = trainSeen | posSet  // one combined Set 
-          val negArts   = bAllArtistIDs.value
-            .filterNot(excluded.contains)      // O(1) per element instead of O(n)
-            .take(posSet.size)
-          posSet.toArray.map((user, _, true)) ++ negArts.map((user, _, false))
-      }
+        val validUserRDD = sc.parallelize(validPerUser.keys.toSeq).map(uid => (uid, true))
 
-      if (candidates.isEmpty) return 0.5
+        val predsLabels = model.recommendProductsForUsers(50)
+          .join(validUserRDD)
+          .flatMap { case (uid, (recs, _)) =>
+            val posSet = validPerUser.getOrElse(uid, Iterable.empty).toSet
+            recs.map(r => (r.rating.toDouble, if (posSet.contains(r.product)) 1.0 else 0.0))
+          }.collect()
 
-      // One batch predict — far cheaper than per-user predict
-      val pairsRDD = sc.parallelize(candidates.map { case (u, a, _) => (u, a) }, 64)
-      val predsMap = model.predict(pairsRDD)
-        .map(r => ((r.user, r.product), r.rating)).collectAsMap()
-
-      val predsLabels: Array[(Double, Double)] = candidates.flatMap {
-        case (u, a, isPos) =>
-          predsMap.get((u, a)).map(score => (score, if (isPos) 1.0 else 0.0))
-      }
-
-      localAUC(predsLabels)  // one local AUC over all users combined
+          localAUC(predsLabels)
     }
 
     // Grid search
