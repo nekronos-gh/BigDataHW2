@@ -7,30 +7,14 @@ if [ -z "$JAR" ]; then
   exit 1
 fi
 
-DRIVER_MEMORY="${DRIVER_MEMORY:-50g}"
-# Use all available cores explicitly
-NUM_CORES="${SLURM_CPUS_PER_TASK:-$(nproc)}"
-
-echo "Running with driver memory: ${DRIVER_MEMORY}, cores: ${NUM_CORES}"
+echo "Running with master in: ${MASTER_URL}"
 
 "$SPARK_HOME"/bin/spark-submit \
-  --master yarn \
-  --deploy-mode cluster \
-  --num-executors 10 \
-  --executor-cores 64 \
-  --executor-memory 100g \
-  --driver-memory 50g \
-  --driver-memory "${DRIVER_MEMORY}" \
+  --master "${MASTER_URL}" \
+  --driver-memory 40g \
+  --executor-memory 60g \
   --conf spark.driver.maxResultSize=8g \
-  --conf spark.memory.fraction=0.8 \
-  --conf spark.memory.storageFraction=0.3 \
   --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
-  --conf spark.kryoserializer.buffer.max=512m \
-  --conf spark.default.parallelism="${NUM_CORES}" \
-  --conf spark.locality.wait=0 \
-  --conf spark.speculation=false \
-  --conf spark.executor.extraJavaOptions="-XX:+UseG1GC -XX:G1HeapRegionSize=32m" \
-  --conf spark.driver.extraJavaOptions="-XX:+UseG1GC -XX:G1HeapRegionSize=32m" \
-  --conf spark.ui.enabled=false \
+  --conf spark.default.parallelism=256 \
   --class Problem3 \
   "$JAR"
