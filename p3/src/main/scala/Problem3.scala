@@ -173,8 +173,9 @@ object Problem3 {
         case (user, posArts) =>
           val posSet   = posArts.toSet
           val trainSeen = bActualArtists.value.getOrElse(user, Set.empty[Int])
-          val negArts  = bAllArtistIDs.value
-            .filterNot(a => trainSeen.contains(a) || posSet.contains(a))
+          val excluded  = trainSeen | posSet  // one combined Set 
+          val negArts   = bAllArtistIDs.value
+            .filterNot(excluded.contains)      // O(1) per element instead of O(n)
             .take(posSet.size)
           posSet.toArray.map((user, _, true)) ++ negArts.map((user, _, false))
       }
