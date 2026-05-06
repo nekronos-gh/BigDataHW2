@@ -2,11 +2,11 @@
 #SBATCH --job-name=p3
 #SBATCH --output=p3_%j.out
 #SBATCH --error=p3_%j.err
-#SBATCH --nodes=12
-#SBATCH --ntasks=8
-#SBATCH --cpus-per-task=64
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=128
 #SBATCH --mem=0
-#SBATCH --time=02:00:00          # tighter deadline — job gets scheduled faster on most clusters
+#SBATCH --time=02:00:00  
 #SBATCH --partition=batch
 #SBATCH --exclusive
 
@@ -15,15 +15,13 @@ SBT_VERSION=1.10.1
 SBT_HOME="$HOME/sbt"
 
 # Load modules
-module load tools/Hadoop
 module load env/development/2024a
 module load devel/Spark
+
 if [ -z "$SPARK_HOME" ]; then
   echo "ERROR: SPARK_HOME not set after module load. Aborting." >&2
   exit 1
 fi
-
-export MASTER_URL="spark://$(scontrol show hostname $SLURM_NODELIST | head -n 1):7077"
 
 # Install SBT once into $HOME
 if [ ! -d "$SBT_HOME" ]; then
@@ -47,7 +45,7 @@ export SBT_OPTS="-Xms512m -Xmx2g \
   -Dsbt.ivy.home=$HOME/.ivy2 \
   -Dsbt.boot.directory=$HOME/.sbt/boot"
 
-# Incremental compile is much
+# Incremental compile is
 echo "Building project..."
 sbt package
 if [ $? -ne 0 ]; then
@@ -55,7 +53,6 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-export DRIVER_MEMORY="100g"
-
-echo "Submitting Spark job..."
+# 2. Run Job
+echo "Submitting Job..."
 ./run.sh

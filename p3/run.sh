@@ -7,14 +7,17 @@ if [ -z "$JAR" ]; then
   exit 1
 fi
 
-echo "Running with master in: ${MASTER_URL}"
-
 "$SPARK_HOME"/bin/spark-submit \
-  --master "${MASTER_URL}" \
-  --driver-memory 40g \
-  --executor-memory 60g \
-  --conf spark.driver.maxResultSize=8g \
+  --master "local[*]" \
+  --driver-memory 220g \
+  --driver-java-options "-XX:+UseG1GC -XX:G1HeapRegionSize=32m -XX:InitiatingHeapOccupancyPercent=35" \
+  --conf spark.driver.maxResultSize=20g \
   --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+  --conf spark.kryoserializer.buffer.max=512m \
   --conf spark.default.parallelism=256 \
+  --conf spark.sql.shuffle.partitions=256 \
+  --conf spark.locality.wait=0 \
+  --conf spark.memory.fraction=0.8 \
+  --conf spark.memory.storageFraction=0.3 \
   --class Problem3 \
   "$JAR"
