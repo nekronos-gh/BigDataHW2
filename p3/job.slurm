@@ -2,8 +2,8 @@
 #SBATCH --job-name=p3
 #SBATCH --output=p3_%j.out
 #SBATCH --error=p3_%j.err
-#SBATCH --nodes=1
-#SBATCH --ntasks=1
+#SBATCH --nodes=10
+#SBATCH --ntasks=10
 #SBATCH --cpus-per-task=64
 #SBATCH --mem=0
 #SBATCH --time=02:00:00          # tighter deadline — job gets scheduled faster on most clusters

@@ -14,7 +14,12 @@ NUM_CORES="${SLURM_CPUS_PER_TASK:-$(nproc)}"
 echo "Running with driver memory: ${DRIVER_MEMORY}, cores: ${NUM_CORES}"
 
 "$SPARK_HOME"/bin/spark-submit \
-  --master "local[${NUM_CORES}]" \
+  --master yarn \
+  --deploy-mode cluster \
+  --num-executors 10 \
+  --executor-cores 64 \
+  --executor-memory 100g \
+  --driver-memory 50g \
   --driver-memory "${DRIVER_MEMORY}" \
   --conf spark.driver.maxResultSize=8g \
   --conf spark.memory.fraction=0.8 \

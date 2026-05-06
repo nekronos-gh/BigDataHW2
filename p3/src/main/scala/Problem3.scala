@@ -35,14 +35,6 @@ object Problem3 {
 
     val spark = SparkSession.builder()
       .appName("Problem3")
-      .master("local[*]")
-      // Tune shuffle / parallelism for 64-core node
-      .config("spark.default.parallelism", "128")
-      .config("spark.sql.shuffle.partitions", "128")
-      .config("spark.memory.fraction", "0.8")
-      .config("spark.memory.storageFraction", "0.3")
-      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-      .config("spark.kryoserializer.buffer.max", "512m")
       .getOrCreate()
 
     val sc = spark.sparkContext
