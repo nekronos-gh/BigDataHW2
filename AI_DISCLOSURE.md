@@ -70,6 +70,7 @@
 4. Ask for grammar and documentation improvements.
 5. Request a draft structure general solution.
 6. Review the proposed solution structure and ask for changes where needed.
+
 ---
 
 ### Henrik Klasen
@@ -85,7 +86,6 @@
 
 1. **Task delegation:** The LLM handles tasks with context of the full codebase:
    - Implementation of the Scala scripts
-
 
 2. **Self-Handled Tasks**:
    - Bash script for download
@@ -108,6 +108,7 @@
 7. Review and test scala code
 8. Copy any errors or warnings or weird looking outputs into the LLM for clarification and if applicable, bug fixing
 9. Run code for testing and getting result.
+
 ---
 
 ## Summary of AI Tools Used
@@ -118,7 +119,7 @@
 | Eduardo Rodríguez Sánchez | Perplexity AI          | Documentation lookup               |
 | Michalina Miszkiewicz     | Microsoft Copilot      | Code Implementation                |
 | Michalina Miszkiewicz     | ChatGPT                | Text correction                    |
-| Henrik Klasen             | Github Copilot      | Code Implementation, Debugging     |
+| Henrik Klasen             | Github Copilot         | Code Implementation, Debugging     |
 
 ---
 
