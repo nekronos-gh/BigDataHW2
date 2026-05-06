@@ -1,27 +1,31 @@
 #!/bin/sh
 
-# Find the first JAR
 JAR=$(find target -name '*.jar' 2>/dev/null | head -n 1)
 
 if [ -z "$JAR" ]; then
-	echo "JAR not found! Build failed."
-	exit 1
+  echo "JAR not found! Build failed."
+  exit 1
 fi
 
-# Memory: use what job.slurm exported, or fall back to a safe default
 DRIVER_MEMORY="${DRIVER_MEMORY:-50g}"
+# Use all available cores explicitly
+NUM_CORES="${SLURM_CPUS_PER_TASK:-$(nproc)}"
 
-echo "Running code with driver memory: ${DRIVER_MEMORY}"
+echo "Running with driver memory: ${DRIVER_MEMORY}, cores: ${NUM_CORES}"
+
 "$SPARK_HOME"/bin/spark-submit \
-	--master local[*] \
-	--driver-memory "${DRIVER_MEMORY}" \
-	--executor-memory "${DRIVER_MEMORY}" \
-	--conf spark.driver.maxResultSize=8g \
-	--conf spark.memory.fraction=0.8 \
-	--conf spark.memory.storageFraction=0.3 \
-	--conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
-	--conf spark.kryoserializer.buffer.max=512m \
-	--conf spark.executor.extraJavaOptions="-XX:+UseG1GC" \
-	--conf spark.driver.extraJavaOptions="-XX:+UseG1GC" \
-	--class Problem3 \
-	"$JAR"
+  --master "local[${NUM_CORES}]" \
+  --driver-memory "${DRIVER_MEMORY}" \
+  --conf spark.driver.maxResultSize=8g \
+  --conf spark.memory.fraction=0.8 \
+  --conf spark.memory.storageFraction=0.3 \
+  --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+  --conf spark.kryoserializer.buffer.max=512m \
+  --conf spark.default.parallelism="${NUM_CORES}" \
+  --conf spark.locality.wait=0 \
+  --conf spark.speculation=false \
+  --conf spark.executor.extraJavaOptions="-XX:+UseG1GC -XX:G1HeapRegionSize=32m" \
+  --conf spark.driver.extraJavaOptions="-XX:+UseG1GC -XX:G1HeapRegionSize=32m" \
+  --conf spark.ui.enabled=false \
+  --class Problem3 \
+  "$JAR"

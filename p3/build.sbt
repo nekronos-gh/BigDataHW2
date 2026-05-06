@@ -9,3 +9,10 @@ libraryDependencies ++= Seq(
 )
 
 ThisBuild / evictionErrorLevel := Level.Warn
+
+// Faster compilation: incremental compiler tuning
+ThisBuild / incOptions := incOptions.value.withEnabled(true)
+
+// Skip generating Scaladoc
+Compile / doc / sources := Seq.empty
+Compile / packageDoc / publishArtifact := false
